@@ -396,6 +396,8 @@ class Colony:
 
             # reproduce
             self._refresh(fly)
+            if self.persist:
+                fly.save_meta(self.flies_dir)
             self._progress()
             if fly.worth >= eco.split_at and len(self.flies) < eco.max_flies:
                 try:

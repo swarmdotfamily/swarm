@@ -65,13 +65,17 @@ class Fly:
 
     # ---- persistence (live daemon only) ----
     def save(self, d: Path):
+        self.save_meta(d)
+        self.genome.save(d / f"{self.addr}.npz")
+
+    def save_meta(self, d: Path):
+        """The small, changing part (age, trades); the genome never changes after birth."""
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{self.addr}.json").write_text(json.dumps({
             "addr": self.addr, "key": self.key, "born_tick": self.born_tick,
             "born_at": self.born_at, "origin": self.origin, "parent": self.parent,
             "age": self.age, "trades": self.trades, "buys": self.buys, "sells": self.sells,
             "children": self.children, "peak_worth": self.peak_worth}))
-        self.genome.save(d / f"{self.addr}.npz")
 
     @classmethod
     def load(cls, d: Path, addr):
