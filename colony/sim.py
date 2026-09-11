@@ -40,10 +40,10 @@ REGIMES = {
 }
 
 
-def run(brain, eco, seed=0, seed_eth=0.02, regimes=REGIMES, quiet=False):
+def run(brain, eco, seed=0, seed_eth=0.02, regimes=REGIMES, quiet=False, workers=1):
     rng = np.random.default_rng(seed)
     chain = SimChain(eco, hive_eth=seed_eth)
-    col = Colony(brain, chain, eco, rng=np.random.default_rng(seed + 1))
+    col = Colony(brain, chain, eco, rng=np.random.default_rng(seed + 1), workers=workers)
     col.income_wei = int(seed_eth * WEI)
     total0 = chain.total_eth()
     curve = []
@@ -88,6 +88,7 @@ def main():
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--seed-eth", type=float, default=0.02, help="ETH the hive starts with (the founder eggs)")
     ap.add_argument("--flies", type=int, default=6, help="cap for --connectome runs")
+    ap.add_argument("--workers", type=int, default=1, help="parallel decision workers (Linux)")
     a = ap.parse_args()
 
     eco = Ecology()
@@ -98,7 +99,7 @@ def main():
     else:
         brain = StubBrain(eco)
     regimes = {"boom": (a.ticks, 0.25, 0.3)} if a.ticks else REGIMES
-    col, chain, curve = run(brain, eco, seed=a.seed, seed_eth=a.seed_eth, regimes=regimes)
+    col, chain, curve = run(brain, eco, seed=a.seed, seed_eth=a.seed_eth, regimes=regimes, workers=a.workers)
     ascii_curve(curve)
     st = col.state()
     BUILD.mkdir(exist_ok=True)

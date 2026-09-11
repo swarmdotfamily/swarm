@@ -20,6 +20,7 @@ websocket - the exact pattern flybrain uses (relay/relay.js, unchanged).
     SWARM_TAX_BPS        creator tax used at hatch (default 500)
     SWARM_TICK_S         override tick seconds
     SWARM_MAX_FLIES      override compute cap
+    SWARM_WORKERS        parallel decision workers (default: all CPU cores)
 """
 import argparse
 import asyncio
@@ -83,14 +84,16 @@ async def main_async(a):
                      env["SWARM_CURVE"], live=live, journal_path=BUILD / "journal.jsonl",
                      tax_bps=int(env.get("SWARM_TAX_BPS", str(eco.tax_bps))))
     brain = StubBrain(eco) if a.stub else ConnectomeBrain(eco)
+    import os
+    workers = int(env.get("SWARM_WORKERS") or max(1, (os.cpu_count() or 1)))
     col = Colony(brain, chain, eco, persist=True, journal=BUILD / "events.jsonl",
-                 queen_key=env["SWARM_QUEEN_SECRET"])
+                 queen_key=env["SWARM_QUEEN_SECRET"], workers=workers)
     col.load_ledger(BUILD / "ledger.json")
     if env.get("SWARM_SEED_ETH"):
         col.income_wei = max(col.income_wei, int(float(env["SWARM_SEED_ETH"]) * 10**18))
     n = restore(col)
     say(f"brain {brain.name} ({getattr(brain, 'neurons', 0):,} neurons)  flies restored {n}"
-        f"  cap {eco.max_flies}  tick {eco.tick_s}s  {'LIVE' if live else 'DRY RUN'}")
+        f"  cap {eco.max_flies}  tick {eco.tick_s}s  workers {workers if col.pool else 1}  {'LIVE' if live else 'DRY RUN'}")
 
     queue = asyncio.Queue(maxsize=4)
     if env.get("SWARM_RELAY_PUSH") and env.get("SWARM_RELAY_SECRET"):

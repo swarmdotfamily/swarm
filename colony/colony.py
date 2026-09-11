@@ -28,11 +28,38 @@ from .fly import Fly
 from .brain import verdict
 from .senses import Tape
 
+# ---------------------------------------------------------------- workers
+# Decisions are independent, so they run in parallel across CPU cores. With the
+# fork start method every worker inherits the loaded connectome by copy-on-write,
+# so N workers cost one graph in memory. On platforms without fork (Windows) the
+# colony simply thinks sequentially.
+_WORKER_BRAIN = None
+
+
+def _init_worker(brain):
+    global _WORKER_BRAIN
+    _WORKER_BRAIN = brain
+
+
+def _sense_job(args):
+    addr, feat, gains, seed = args
+    return addr, _WORKER_BRAIN.sense(feat, gains, seed)
+
+
+def make_pool(brain, workers):
+    import multiprocessing as mp
+    if workers <= 1 or "fork" not in mp.get_all_start_methods():
+        return None
+    ctx = mp.get_context("fork")
+    return ctx.Pool(processes=workers, initializer=_init_worker, initargs=(brain,))
+
 
 class Colony:
     def __init__(self, brain, chain, eco: Ecology, rng=None, persist=False,
-                 flies_dir: Path = FLIES_DIR, journal: Path = None, queen_key=None):
+                 flies_dir: Path = FLIES_DIR, journal: Path = None, queen_key=None, workers=1):
         self.brain = brain
+        self.workers = int(workers)
+        self.pool = make_pool(brain, self.workers)
         self.chain = chain
         self.eco = eco
         self.rng = rng or np.random.default_rng(0)
@@ -89,6 +116,14 @@ class Colony:
 
     def alive_frac(self):
         return len(self.flies) / self.eco.max_flies
+
+    def _sense_all(self, jobs):
+        """jobs: [(addr, feat, gains, seed)] -> {addr: rates}. Parallel when a pool exists."""
+        if not jobs:
+            return {}
+        if self.pool is None:
+            return {addr: self.brain.sense(feat, gains, seed) for addr, feat, gains, seed in jobs}
+        return dict(self.pool.map(_sense_job, jobs, chunksize=1))
 
     def _progress(self):
         if self.on_progress:
@@ -278,7 +313,8 @@ class Colony:
             feat = self.tape.features(self.alive_frac())
         self.last_feat = feat
 
-        # 4. every fly lives one step
+        # 4a. every fly ages, eats, and may die (cheap, sequential: wallet reads + small txs)
+        thinkers = []
         for addr in list(self.flies):
             fly = self.flies.get(addr)
             if fly is None or not fly.alive:
@@ -315,9 +351,17 @@ class Colony:
                 self.die(fly, "starved")
                 continue
 
-            # think
-            seed = int(self.rng.integers(1 << 30))
-            rates = self.brain.sense(feat, fly.genome.gains, seed)
+            thinkers.append((addr, feat, fly.genome.gains, int(self.rng.integers(1 << 30))))
+
+        # 4b. every surviving fly thinks - in parallel across workers
+        rates_by = self._sense_all(thinkers)
+
+        # 4c. every fly acts on what its command neurons said
+        for addr, _, _, _ in thinkers:
+            fly = self.flies.get(addr)
+            if fly is None or not fly.alive:
+                continue
+            rates = rates_by[addr]
             fly.last_rates = {k: float(v) for k, v in rates.items() if not k.startswith("_")}
             fly.spikes = rates.get("_fired_bits", b"")
             fly.fired_n = int(rates.get("_fired_n", 0))
@@ -401,4 +445,5 @@ class Colony:
             "recent_dead": self.dead[-20:],
             "events": self.events[-40:],
             "tick_secs": round(self.last_tick_s, 2),
+            "workers": self.workers if self.pool is not None else 1,
         }
