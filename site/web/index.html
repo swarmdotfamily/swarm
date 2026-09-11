@@ -1,0 +1,534 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SWARM — autonomous biological intelligence on-chain</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/icon-32.png">
+<link rel="icon" href="/favicon.ico">
+<link rel="apple-touch-icon" sizes="180x180" href="/icon-180.png">
+<meta property="og:title" content="SWARM — autonomous biological intelligence on-chain">
+<meta property="og:description" content="A self-sustaining colony of complete fruit-fly nervous systems, each with its own wallet, funded solely by the token's trading fees on Robinhood Chain.">
+<meta property="og:image" content="https://www.swarm.family/logo.png">
+<meta property="og:url" content="https://www.swarm.family/">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:site" content="@swarmdotfamily">
+<meta name="twitter:image" content="https://www.swarm.family/logo.png">
+<meta name="description" content="SWARM: a self-sustaining colony of complete fruit-fly nervous systems, each with its own wallet, funded solely by the coin's trading fees on Robinhood Chain. Every neuron firing is shown live; every birth, trade and death is on chain.">
+<style>
+  :root{--bg:#000;--fg:#e6e6e6;--dim:#7a7a7a;--dimmer:#3a3a3a;--line:#1c1c1c;--acc:#d4ff3a;--buy:#5ee08a;--sell:#ff5c5c;--warn:#ffb454;--mono:ui-monospace,"SF Mono",Menlo,Consolas,"DejaVu Sans Mono",monospace}
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--fg);font:12px/1.55 var(--mono);overflow:hidden}
+  a{color:inherit;text-decoration:none;border-bottom:1px solid var(--dimmer)} a:hover{border-color:var(--fg)}
+  #top{position:fixed;top:0;left:0;right:0;height:44px;display:flex;align-items:center;gap:18px;padding:0 16px;border-bottom:1px solid var(--line);background:var(--bg);z-index:5}
+  #top .brand{font-weight:700;letter-spacing:.22em;font-size:13px;display:flex;align-items:center;gap:10px}
+  #top .brand img{width:26px;height:26px;display:block}
+  #top .tag{color:var(--dim)}
+  #top .sp{flex:1}
+  .pill{border:1px solid var(--dimmer);padding:3px 9px;letter-spacing:.08em;font-size:11px;text-transform:uppercase;white-space:nowrap}
+  .pill.live{border-color:var(--buy);color:var(--buy)}
+  .pill.sim{border-color:var(--warn);color:var(--warn)}
+  .pill.btn{cursor:pointer;border-bottom:1px solid var(--dimmer)}
+  .pill.btn:hover{border-color:var(--fg)}
+  #stage{position:fixed;top:44px;left:0;right:340px;bottom:0;display:flex;flex-direction:column}
+  #feat{position:relative;flex:0 0 56%;min-height:0}
+  #grid{position:relative;flex:1 1 auto;min-height:0;border-top:1px solid var(--line)}
+  #glA,#glB{position:absolute;inset:0;width:100%;height:100%;display:block}
+  #cap{position:absolute;left:16px;top:12px;color:var(--dim);pointer-events:none}
+  #cap b{color:var(--fg);font-weight:400}
+  #hint{position:absolute;right:16px;bottom:10px;color:var(--dimmer);pointer-events:none}
+  #featLbl{position:absolute;left:16px;bottom:30px;pointer-events:none}
+  #featLbl .a{font-size:13px}
+  #featLbl .v{color:var(--dim)}
+  #cells{position:absolute;inset:0;display:grid;gap:0}
+  #cells div{position:relative;overflow:hidden;cursor:pointer;border-right:1px solid var(--line);border-bottom:1px solid var(--line)}
+  #cells div span{position:absolute;left:6px;bottom:4px;right:6px;color:var(--dim);font-size:9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #cells div span i{font-style:normal;color:var(--dimmer)}
+  #cells div.sel{box-shadow:inset 0 0 0 1px var(--acc)} #cells div.sel span{color:var(--acc)}
+  #legend{position:absolute;left:16px;bottom:10px;color:var(--dimmer);font-size:10px;pointer-events:none}
+  #legend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin:0 4px 0 10px;vertical-align:middle}
+  #side{position:fixed;top:44px;right:0;bottom:0;width:340px;background:var(--bg);border-left:1px solid var(--line);overflow-y:auto;padding:0 16px 40px}
+  #side section{padding:14px 0 10px;border-bottom:1px solid var(--line)}
+  h2{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-weight:400;margin:0 0 10px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+  .n{font-size:20px;line-height:1.1}
+  .u{color:var(--dim);font-size:10px;letter-spacing:.04em}
+  .bar{display:grid;grid-template-columns:128px 1fr 52px;align-items:center;gap:8px;margin:5px 0}
+  .bar .l{color:var(--dim);line-height:1.25} .bar .l i{font-style:normal;color:var(--dimmer);font-size:10px}
+  .bar .t{height:4px;background:var(--line);position:relative}
+  .bar .t i{position:absolute;left:0;top:0;bottom:0;background:var(--fg)}
+  .bar .t em{position:absolute;top:-3px;bottom:-3px;width:1px;background:var(--dimmer)}
+  .bar .t i.acc{background:var(--acc)} .bar .t i.sell{background:var(--sell)} .bar .t i.buy{background:var(--buy)}
+  .bar .r{text-align:right}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px}
+  .kv b{font-weight:400;color:var(--dim)}
+  .feed{max-height:260px;overflow-y:auto}
+  .feed div{padding:3px 0;border-bottom:1px solid var(--line);color:var(--dim);word-break:break-all}
+  .feed div b{font-weight:400;color:var(--fg)}
+  .feed .buy{color:var(--buy)} .feed .sell{color:var(--sell)} .feed .born{color:var(--acc)} .feed .died{color:var(--warn)}
+  .verdict.BUY{color:var(--buy)} .verdict.SELL{color:var(--sell)} .verdict.SPLIT{color:var(--acc)} .verdict.FULL{color:var(--dim)}
+  #about{position:fixed;inset:44px 0 0 0;background:rgba(0,0,0,.94);z-index:6;overflow-y:auto;padding:40px 16px 80px}
+  #about .in{max-width:720px;margin:0 auto;font-size:13px;line-height:1.7}
+  #about p{margin:0 0 14px;color:#cfcfcf} #about b{color:var(--fg);font-weight:400}
+  #about h3{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dim);font-weight:400;margin:26px 0 8px}
+  #about dl{margin:0} #about dt{color:var(--fg);margin-top:10px} #about dd{margin:2px 0 0;color:#bdbdbd}
+  #about .x{position:fixed;top:56px;right:24px;cursor:pointer;color:var(--dim)}
+  #err{position:absolute;left:16px;top:44px;color:var(--sell);display:none}
+  @media(max-width:900px){#stage{right:0;bottom:46%}#side{top:auto;left:0;width:auto;height:46%;border-left:0;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div id="top">
+  <a class="brand" href="/" style="border:0"><img src="/icon-180.png" alt="">SWARM</a>
+  <span class="tag">autonomous biological intelligence on Robinhood Chain</span>
+  <span class="sp"></span>
+  <span id="ca" class="pill">CA · not launched</span>
+  <a id="xlink" class="pill btn" href="https://x.com/swarmdotfamily" target="_blank" rel="noopener">X</a>
+  <span id="aboutBtn" class="pill btn">About</span>
+</div>
+
+<div id="stage">
+  <div id="feat">
+    <canvas id="glA"></canvas>
+    <div id="cap"><b id="capN">—</b> flies × <b>165,122</b> neurons · each flash is a neuron that fired in the fly's last decision<br><span id="capNote"></span></div>
+    <div id="err"></div>
+    <div id="featLbl"><div class="a" id="featA">—</div><div class="v" id="featV"></div></div>
+    <div id="legend"><i style="background:#d4ff3a"></i>firing <i style="background:#5ee08a"></i>eat MN9 <i style="background:#ff5c5c"></i>escape DNp01 <i style="background:#ffb454"></i>market senses <i style="background:#c08fff"></i>descending <i style="background:#3a3a3a"></i>silent</div>
+    <div id="hint">drag to rotate · click a fly below to feature it</div>
+  </div>
+  <div id="grid">
+    <canvas id="glB"></canvas>
+    <div id="cells"></div>
+  </div>
+</div>
+
+<aside id="side">
+  <section>
+    <h2>Now</h2>
+    <div class="grid2">
+      <div><div class="n" id="nPop">—</div><div class="u">flies alive · cap <span id="nCap">—</span></div></div>
+      <div><div class="n" id="nEggs">—</div><div class="u">eggs in the hive</div></div>
+      <div><div class="n" id="nBirths">—</div><div class="u">births · <span id="nDeaths">—</span> deaths</div></div>
+      <div><div class="n" id="nGen">—</div><div class="u">deepest generation</div></div>
+      <div><div class="n" id="nTreas">—</div><div class="u">ETH held by the colony</div></div>
+      <div><div class="n" id="nTreasTok">—</div><div class="u">SWARM held by the colony</div></div>
+      <div><div class="n" id="nEaten">—</div><div class="u">SWARM burned · <span id="nBudget">—</span> of the 10% cap used</div></div>
+      <div><div class="n" id="nPrice">—</div><div class="u">gwei per SWARM</div></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>This fly</h2>
+    <div class="kv" id="flyKv"></div>
+  </section>
+
+  <section>
+    <h2>What it wants to do</h2>
+    <div id="wants"></div>
+    <div class="u" style="margin-top:6px">ticks = the thresholds it acts on · MN9 ≥ 225 Hz buys · DNp01 ≥ 150 Hz sells everything</div>
+  </section>
+
+  <section>
+    <h2>What it feels</h2>
+    <div id="feels"></div>
+    <div class="u" style="margin-top:6px">measured firing of its sensory neurons · tick = the market drive we put on them (0–200 Hz)</div>
+  </section>
+
+  <section>
+    <h2>What is lit</h2>
+    <div id="regions"></div>
+    <div class="u" style="margin-top:6px">neurons that fired in its last decision window, by region of the nervous system</div>
+  </section>
+
+  <section>
+    <h2>What the swarm smells</h2>
+    <div id="smells"></div>
+    <div class="u" style="margin-top:6px">projected onto its taste, looming and pheromone neurons</div>
+  </section>
+
+  <section>
+    <h2>The hive, on chain</h2>
+    <div class="kv" id="hiveKv"><b>status</b><span>not deployed</span></div>
+  </section>
+
+  <section>
+    <h2>What just happened</h2>
+    <div class="feed" id="feed"></div>
+  </section>
+
+  <section>
+    <h2>Under the hood</h2>
+    <div class="kv" id="hood"></div>
+  </section>
+</aside>
+
+<div id="about" hidden>
+  <span class="x" id="aboutX">close ×</span>
+  <div class="in">
+    <p><b>SWARM</b> is a self-sustaining population of biological neural networks that lives on-chain. Each agent runs the complete, measured wiring of a real fruit fly's nervous system and holds its own wallet. The colony's only income is the trading fee on the SWARM token. It grows when the token is traded and contracts when it is not.</p>
+    <h3>The organism</h3>
+    <p>Every fly is the full male <i>Drosophila melanogaster</i> central nervous system as mapped by Google Research, HHMI Janelia and the University of Cambridge: 165,122 neurons and 10.2 million synapses, reconstructed from electron microscopy of one animal. The wiring is a measurement and is never edited. It runs as a spiking network using the method that has been shown to predict real fly behaviour from connectivity alone (Shiu et al., <i>Nature</i> 2024). What differs between flies is the strength of each synapse, the one quantity microscopy cannot measure; that is the fly's genome. 140,024 neurons have a recorded cell-body position and are the points drawn on this page.</p>
+    <h3>The economy</h3>
+    <p>The token's creator tax (3% of every trade) is paid to the <b>Hive</b>, an immutable contract with no owner and no withdraw function. Value leaves the Hive through one path only: <b>spawn</b>, which funds exactly one new fly with a fixed birth cost (0.002 ETH), at most once per minute, to a fresh wallet. Every birth is a public transaction. Capital is conserved by design: fees become fly wallets, fly wallets return to the Hive at death, and at least 90% of everything that ever enters the colony remains as ETH in those wallets. At most 10% of a fly's net worth may be held in SWARM at any time.</p>
+    <h3>Perception and action</h3>
+    <p>Each cycle (every ten minutes), market conditions are presented to the fly as sensory input on the neurons that actually carry those signals in the animal: momentum on sweet-taste receptors, liquidity on secondary taste receptors, sell pressure on bitter-taste receptors, sharp drawdowns on the looming-detection circuit, colony size on pheromone receptors. The decision is read from the fly's own command neurons. Sustained activity in MN9, the feeding motor neuron, buys. Activity in DNp01, the giant-fiber escape neuron, sells the entire position. Otherwise the fly holds. Positions are small by rule: a fly keeps at least 90% of its net worth in ETH.</p>
+    <h3>Metabolism, reproduction, death</h3>
+    <p>Each fly has a small metabolism: over its lifetime it burns one tenth of a birth's value in SWARM, sent to the burn address, coin it already holds first. The colony as a whole never burns more than 10% of the ETH that has ever entered it; that limit is enforced in code and reported live on this page. A fly whose net worth reaches two births divides: one birth funds a child with a mutated genome. A fly lives 288 cycles (two days), then returns its wallet to the Hive, where it funds the next birth. A fly whose net worth falls below a quarter of a birth does the same early. Genomes that survive are, by construction, the ones that worked on this market.</p>
+    <h3>What is true and what is not</h3>
+    <dl>
+      <dt>Fees can only become flies.</dt><dd>Enforced by the contract. The Hive has no withdraw, owner or upgrade path; spawn is the only outflow, at a fixed price and a fixed maximum rate. Verifiable on the block explorer.</dd>
+      <dt>Capital is conserved.</dt><dd>Yes, with two published leaks: the launch protocol's 1% trade fee on every fly trade, and a metabolism capped at 10% of all income. Everything else stays as ETH in the Hive and fly wallets, and moves only between them.</dd>
+      <dt>The colony can be recovered.</dt><dd>Yes. The operator holds every fly key and can name any address as the recipient of a birth, so every wei in the colony is recoverable by the operator: fly wallets immediately, the Hive at one birth per minute. This is a feature of the design, not a hidden path.</dd>
+      <dt>A fly's balance is independent of the operator.</dt><dd>No. The queen process that runs the brains holds every fly's key; see above. Every movement is a public transaction from a named fly wallet.</dd>
+      <dt>The fee routing is permanent.</dt><dd>Nearly. The launch protocol retains a timelocked right to propose a new fee recipient. Any such proposal is displayed here the moment it exists.</dd>
+      <dt>The brain is a living fly.</dt><dd>It is the measured nervous system of one fly, run as a spiking network; no animal is involved. Which market signals reach which sensory neurons is our design decision; the response is the wiring's.</dd>
+      <dt>No team allocation.</dt><dd>The launch made no opening purchase and granted no exemptions. This holds only as long as no purchase is ever made from the queen key.</dd>
+      <dt>The flies are profitable traders.</dt><dd>Not claimed. Losses are reported with the same prominence as gains.</dd>
+    </dl>
+    <h3>Source</h3>
+    <p>Connectome: Male CNS v1.0 (HHMI Janelia FlyEM, Google Research, University of Cambridge, CC-BY). Simulation framework: <a href="https://github.com/ad7584/flycoin" target="_blank" rel="noopener">ad7584/flycoin</a> (MIT). Launch protocol: pons v2 on Robinhood Chain.</p>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/0.158.0/three.min.js"></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const EXPL = 'https://robinhoodchain.blockscout.com';
+const eth = (w) => Number(w || 0) / 1e18;
+const f5 = (x) => x.toFixed(5);
+const short = (a) => (a && a.length > 14) ? a.slice(0, 6) + '…' + a.slice(-4) : (a || '');
+const fmt = (n) => Number(n || 0).toLocaleString();
+let BIRTH = 0.002;
+let st_eco = {};
+const SENSES = [
+  ['appetite_primary', 'sweet taste', 'LB3c · LB1e', 'momentum'],
+  ['appetite_secondary', 'sweet, secondary', 'LB4a · LB1d · LB3b', 'liquidity'],
+  ['aversive', 'bitter taste', 'LB1c', 'danger'],
+  ['threat', 'looming', 'LPLC2', 'crash'],
+  ['social', 'cVA pheromone', 'ORN_DA1', 'colony size'],
+];
+
+// ------------------------------------------------------------- the cloud
+let N = 0, T = 0, XYZ = null, GRP = null, THUMB = null;
+const COL = {  // group -> base colour (silent) ; firing colours below
+  0: [0.10, 0.11, 0.15], 1: [0.09, 0.12, 0.2], 2: [0.22, 0.14, 0.32], 3: [0.12, 0.34, 0.18],
+  4: [0.4, 0.1, 0.1], 5: [0.24, 0.14, 0.24], 6: [0.38, 0.24, 0.08], 7: [0.22, 0.22, 0.12],
+};
+const FIRE = { 0: [0.83, 1.0, 0.23], 1: [0.83, 1.0, 0.23], 2: [0.75, 0.56, 1.0], 3: [0.37, 0.88, 0.54],
+  4: [1.0, 0.36, 0.36], 5: [0.9, 0.6, 0.95], 6: [1.0, 0.7, 0.33], 7: [1.0, 0.85, 0.5] };
+
+async function loadCloud() {
+  const buf = await (await fetch('/neurons.bin', { cache: 'force-cache' })).arrayBuffer();
+  const dv = new DataView(buf);
+  N = dv.getUint32(0, true); T = dv.getUint32(4, true);
+  let o = 8;
+  XYZ = new Float32Array(buf, o, N * 3); o += N * 12;
+  GRP = new Uint8Array(buf, o, N); o += N;
+  THUMB = new Uint32Array(buf.slice(o, o + T * 4));
+}
+
+async function unpackSpikes(b64) {
+  // zlib(packbits) base64 -> Uint8Array of N bits
+  if (!b64) return null;
+  const raw = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+  let bytes;
+  try {
+    const ds = new DecompressionStream('deflate');
+    const w = ds.writable.getWriter(); w.write(raw); w.close();
+    bytes = new Uint8Array(await new Response(ds.readable).arrayBuffer());
+  } catch (e) { return null; }
+  const bits = new Uint8Array(N);
+  for (let i = 0; i < N; i++) bits[i] = (bytes[i >> 3] >> (7 - (i & 7))) & 1;
+  return bits;
+}
+
+// ------------------------------------------------------------- the stage
+const canvasA = $('#glA'), canvasB = $('#glB');
+const rendA = new THREE.WebGLRenderer({ canvas: canvasA, antialias: false, alpha: false, powerPreference: 'high-performance' });
+const rendB = new THREE.WebGLRenderer({ canvas: canvasB, antialias: false, alpha: false, powerPreference: 'high-performance' });
+rendA.setPixelRatio(Math.min(devicePixelRatio, 2)); rendB.setPixelRatio(Math.min(devicePixelRatio, 2));
+const sceneA = new THREE.Scene(), sceneB = new THREE.Scene();
+const camA = new THREE.PerspectiveCamera(38, 1, 0.01, 50); camA.position.set(0, 0, 1.95);
+const camB = new THREE.OrthographicCamera(0, 1, 0, 1, -10, 10);
+const matBig = new THREE.PointsMaterial({ size: 1.15, vertexColors: true, sizeAttenuation: false, transparent: true, opacity: 0.85, depthWrite: false });
+const matSmall = new THREE.PointsMaterial({ size: 1.0, vertexColors: true, sizeAttenuation: false, transparent: true, opacity: 0.75, depthWrite: false });
+
+let featured = null;   // THREE.Points, full cloud, coloured for the selected fly
+let featColors = null; // Float32Array N*3
+let featBits = null;   // Uint8Array N (who fired)
+let featFireIdx = null;// Uint32Array indices of fired neurons (for flicker)
+const thumbs = new Map(); // addr -> {pts, colors, bits}
+let flies = [];           // current fly summaries
+let selected = null;      // addr
+let rot = { x: 0, y: 0, vx: 0, vy: 0, drag: false, lx: 0, ly: 0 };
+
+function makeGeom(idx) {
+  const n = idx ? idx.length : N;
+  const pos = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { const j = idx ? idx[i] : i; pos[i * 3] = XYZ[j * 3]; pos[i * 3 + 1] = XYZ[j * 3 + 1]; pos[i * 3 + 2] = XYZ[j * 3 + 2]; }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  return g;
+}
+let geomThumbBase = null;
+
+function paint(colors, idx, bits, boost) {
+  const n = idx ? idx.length : N;
+  for (let i = 0; i < n; i++) {
+    const j = idx ? idx[i] : i;
+    const g = GRP[j];
+    const on = bits && bits[j];
+    const c = on ? FIRE[g] : COL[g];
+    const k = on ? 0.55 * boost : 1;
+    colors[i * 3] = c[0] * k; colors[i * 3 + 1] = c[1] * k; colors[i * 3 + 2] = c[2] * k;
+  }
+}
+
+function buildFeatured() {
+  const g = makeGeom(null);
+  featColors = new Float32Array(N * 3);
+  paint(featColors, null, null, 1);
+  g.setAttribute('color', new THREE.BufferAttribute(featColors, 3));
+  featured = new THREE.Points(g, matBig);
+  sceneA.add(featured);
+}
+
+async function setFeatured(fly) {
+  selected = fly ? fly.addr : null;
+  featBits = fly ? await unpackSpikes(fly.spikes) : null;
+  featFireIdx = null;
+  if (featBits) { const l = []; for (let i = 0; i < N; i++) if (featBits[i]) l.push(i); featFireIdx = Uint32Array.from(l); }
+  paint(featColors, null, featBits, 1);
+  featured.geometry.attributes.color.needsUpdate = true;
+  renderFly(fly);
+  layoutLabels();
+}
+
+async function syncThumbs() {
+  const seen = new Set();
+  for (const f of flies) {
+    seen.add(f.addr);
+    let t = thumbs.get(f.addr);
+    if (!t) {
+      const g = geomThumbBase.clone();
+      const colors = new Float32Array(T * 3);
+      g.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      t = { pts: new THREE.Points(g, matSmall), colors, bits: null, spikes: null };
+      sceneB.add(t.pts);
+      thumbs.set(f.addr, t);
+    }
+    if (t.spikes !== f.spikes) {
+      t.spikes = f.spikes;
+      t.bits = await unpackSpikes(f.spikes);
+      paint(t.colors, THUMB, t.bits, 1);
+      t.pts.geometry.attributes.color.needsUpdate = true;
+    }
+  }
+  for (const [addr, t] of thumbs) if (!seen.has(addr)) { sceneB.remove(t.pts); t.pts.geometry.dispose(); thumbs.delete(addr); }
+}
+
+// layout: featured brain in the upper part, grid of thumbs in the lower part (pixel-space ortho)
+let WA = 1, HA = 1, WB = 1, HB = 1;
+function resize() {
+  const a = $('#feat').getBoundingClientRect(), b = $('#grid').getBoundingClientRect();
+  WA = Math.max(1, Math.floor(a.width)); HA = Math.max(1, Math.floor(a.height));
+  WB = Math.max(1, Math.floor(b.width)); HB = Math.max(1, Math.floor(b.height));
+  rendA.setSize(WA, HA, false); rendB.setSize(WB, HB, false);
+  camA.aspect = WA / HA; camA.updateProjectionMatrix();
+  camB.left = 0; camB.right = WB; camB.top = 0; camB.bottom = HB; camB.updateProjectionMatrix();
+  layoutGrid();
+}
+// the thumbnails live in a real CSS grid; each brain is placed from its cell's measured box
+function layoutGrid() {
+  const cells = $('#cells');
+  const n = Math.max(1, flies.length);
+  let cols = Math.max(1, Math.round(Math.sqrt(n * WB / Math.max(1, HB))));
+  cols = Math.min(n, cols);
+  const rows = Math.ceil(n / cols);
+  cells.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+  cells.style.gridTemplateRows = `repeat(${rows}, 1fr)`;
+  if (cells.children.length !== flies.length) {
+    cells.innerHTML = '';
+    flies.forEach((f, i) => {
+      const d = document.createElement('div');
+      d.dataset.i = i;
+      d.innerHTML = '<span></span>';
+      d.onclick = () => setFeatured(flies[i]);
+      cells.appendChild(d);
+    });
+  }
+  const gb = $('#grid').getBoundingClientRect();
+  flies.forEach((f, i) => {
+    const d = cells.children[i]; if (!d) return;
+    d.className = f.addr === selected ? 'sel' : '';
+    d.firstChild.innerHTML = `${short(f.addr)} <i>g${f.gen} · ${f.last}</i>`;
+    const r = d.getBoundingClientRect();
+    const t = thumbs.get(f.addr); if (!t) return;
+    const cx = r.left - gb.left + r.width / 2, cy = r.top - gb.top + r.height / 2 - 4;
+    const sc = Math.min(r.width, r.height) * 0.6;
+    t.pts.position.set(cx, cy, 0);
+    t.pts.scale.set(sc, -sc, sc);
+  });
+}
+function layoutLabels() { layoutGrid(); }
+canvasA.addEventListener('pointerdown', (e) => { rot.drag = true; rot.lx = e.clientX; rot.ly = e.clientY; rot.vy = 0; });
+addEventListener('pointerup', () => { rot.drag = false; });
+addEventListener('pointermove', (e) => {
+  if (!rot.drag) return;
+  rot.y += (e.clientX - rot.lx) * 0.008; rot.x += (e.clientY - rot.ly) * 0.008;
+  rot.x = Math.max(-1.2, Math.min(1.2, rot.x));
+  rot.lx = e.clientX; rot.ly = e.clientY;
+});
+addEventListener('resize', resize);
+new ResizeObserver(resize).observe($('#stage'));
+
+let frame = 0;
+function loop() {
+  requestAnimationFrame(loop);
+  frame++;
+  if (!featured) return;
+  featured.rotation.set(rot.x, rot.y, 0);
+  for (const t of thumbs.values()) t.pts.rotation.set(0, 0, 0);
+  // flicker: the fired set is a window of 180 ms; show it as a sputter rather than a static mask
+  if (featFireIdx && featFireIdx.length && frame % 2 === 0) {
+    const c = featColors, n = featFireIdx.length, k = Math.min(n, 6000);
+    for (let s = 0; s < k; s++) {
+      const j = featFireIdx[(Math.random() * n) | 0], g = GRP[j], on = Math.random() < 0.6;
+      const col = FIRE[g], b = on ? 1.0 : 0.4;
+      c[j * 3] = col[0] * b; c[j * 3 + 1] = col[1] * b; c[j * 3 + 2] = col[2] * b;
+    }
+    featured.geometry.attributes.color.needsUpdate = true;
+  }
+  rendA.render(sceneA, camA);
+  rendB.render(sceneB, camB);
+}
+
+// ------------------------------------------------------------- readouts
+function bar(label, v, max, mark, cls) {
+  const p = Math.max(0, Math.min(100, v / max * 100));
+  const m = mark != null ? `<em style="left:${Math.min(100, mark / max * 100)}%"></em>` : '';
+  return `<div class="bar"><span class="l">${label}</span><span class="t"><i class="${cls || ''}" style="width:${p}%"></i>${m}</span><span class="r">${typeof v === 'number' ? v.toFixed(v < 10 ? 2 : 0) : v}</span></div>`;
+}
+function renderFly(f) {
+  const kv = $('#flyKv');
+  if (!f) { kv.innerHTML = '<b>—</b><span>nobody is alive</span>'; $('#featA').textContent = '—'; $('#featV').textContent = ''; $('#wants').innerHTML = ''; return; }
+  const link = f.addr.startsWith('0x') ? `<a href="${EXPL}/address/${f.addr}" target="_blank" rel="noopener">${f.addr}</a>` : f.addr;
+  const w = eth(f.worth);
+  kv.innerHTML = [
+    ['wallet', link], ['genome', `${f.gid} · generation ${f.gen}`],
+    ['born', f.origin + (f.parent ? ' of ' + short(f.parent) : '')],
+    ['age', `${f.age} of ${(st_eco.lifespan_ticks || 288)} ticks`], ['worth', `${f5(w)} ETH · ${(w / BIRTH * 100).toFixed(0)}% of a birth`],
+    ['holds', `${f5(eth(f.eth))} ETH · ${fmt(Math.round(eth(f.tok)))} SWARM`],
+    ['trades', `${f.buys} buys · ${f.sells} sells · ${f.children} children`],
+    ['last verdict', `<span class="verdict ${f.last}">${f.last === 'FULL' ? 'wants to buy · position at the 10% cap' : f.last}</span>`],
+    ['neurons fired', f.fired_n ? `${fmt(f.fired_n)} in 180 ms · ${fmt(f.spikes_per_s)} spikes/s` : 'no recording for this fly'],
+  ].map(([k, v]) => `<b>${k}</b><span>${v}</span>`).join('');
+  $('#featA').textContent = short(f.addr) + ' · gen ' + f.gen;
+  $('#featV').textContent = `${f.last === 'FULL' ? 'BUY · at cap' : f.last} · MN9 ${f.mn9} Hz · DNp01 ${f.dnp01} Hz`;
+  $('#wants').innerHTML = bar('eat (MN9)', f.mn9, 450, 225, f.mn9 >= 225 ? 'buy' : '') + bar('escape (giant fiber)', f.dnp01, 450, 150, f.dnp01 >= 150 ? 'sell' : '')
+    + bar('freeze (DNp09)', f.dnp09 || 0, 450) + bar('court (pC1)', f.pc1 || 0, 450);
+  const S = f.senses || {};
+  $('#feels').innerHTML = SENSES.map(([k, name, cells, feat]) => {
+    const v = S[k] || { hz: 0, drive: 0, n: 0 };
+    return bar(`${name}<br><i>${cells} ← ${feat}</i>`, v.hz, 250, v.drive, v.hz > 20 ? 'acc' : '');
+  }).join('') || '<div class="u">no recording for this fly</div>';
+  const R = f.regions || {};
+  $('#regions').innerHTML = Object.keys(R).map((name) => {
+    const [n, tot] = R[name];
+    return bar(`${name}<br><i>${fmt(n)} of ${fmt(tot)}</i>`, tot ? n / tot * 100 : 0, 100, null, n / tot > 0.3 ? 'acc' : '').replace(/<span class="r">[^<]*<\/span>/, `<span class="r">${tot ? (n / tot * 100).toFixed(0) : 0}%</span>`);
+  }).join('') || '<div class="u">no recording for this fly</div>';
+}
+function renderNow(st) {
+  $('#nPop').textContent = st.population; $('#nCap').textContent = st.cap;
+  $('#nEggs').textContent = st.hive_eggs; $('#nBirths').textContent = st.births; $('#nDeaths').textContent = st.deaths;
+  $('#nGen').textContent = st.max_gen; $('#nEaten').textContent = fmt(Math.round(eth(st.burned)));
+  $('#nTreas').textContent = eth(st.treasury_eth_wei || 0).toFixed(4);
+  $('#nTreasTok').textContent = fmt(Math.round(eth(st.treasury_tok || 0)));
+  const cap = (st.income_wei || 0) * 0.10;
+  $('#nBudget').textContent = cap ? Math.min(100, (st.burn_wei || 0) / cap * 100).toFixed(0) + '%' : '0%';
+  $('#nPrice').textContent = (Number(st.price_wei || 0) / 1e9).toFixed(3);
+  const f = st.features || {};
+  $('#smells').innerHTML = ['momentum', 'liquidity', 'danger', 'crash', 'social'].map((k) => bar(k, f[k] || 0, 1)).join('');
+  $('#capN').textContent = st.population;
+}
+function renderFeed(st) {
+  const lines = [];
+  for (const e of (st.events || []).slice().reverse()) {
+    const a = e.addr ? short(String(e.addr)) : '';
+    const tx = e.tx && String(e.tx).startsWith('0x') ? ` <a href="${EXPL}/tx/${e.tx}" target="_blank" rel="noopener">tx</a>` : '';
+    let s = '', cls = '';
+    if (e.kind === 'born') { s = `<b>${a}</b> born · ${e.origin}${e.parent ? ' of ' + short(e.parent) : ''} · gen ${e.gen}`; cls = 'born'; }
+    else if (e.kind === 'died') { s = `<b>${a}</b> died · ${e.cause} · age ${e.age} · ${e.children} children`; cls = 'died'; }
+    else if (e.kind === 'buy') { s = `<b>${a}</b> MN9 ${e.mn9} Hz → buys ${f5(eth(e.wei))} ETH`; cls = 'buy'; }
+    else if (e.kind === 'sell') { s = `<b>${a}</b> DNp01 ${e.dnp01} Hz → sells all for ${f5(eth(e.out))} ETH`; cls = 'sell'; }
+    else if (e.kind === 'eat') s = `${a} eats ${fmt(Math.round(eth(e.units || e.burned || 0)))} SWARM`;
+    else if (e.kind === 'tick') s = `tick ${e.tick} · ${e.pop} alive · ${e.eggs} eggs · fed ${f5(eth(e.fed))} ETH`;
+    else if (String(e.kind).endsWith('failed')) { s = `${a} ${e.kind}: ${e.err || ''}`; cls = 'died'; }
+    else continue;
+    lines.push(`<div class="${cls}">${s}${tx}</div>`);
+  }
+  $('#feed').innerHTML = lines.join('') || '<div>nothing yet</div>';
+}
+function renderHood(st, live, age) {
+  $('#hood').innerHTML = [
+    ['brain', st.brain === 'connectome' ? `${fmt(st.neurons)} neurons · ${fmt(st.n_cloud)} drawn` : 'stub · simulation only'],
+    ['decisions', `${st.population} per tick · ${st.tick_secs} s of machine time`],
+    ['tick', `${st.tick} · every 600 s`], ['state age', live ? `${age} s` : 'not live'],
+    ['splits', st.splits], ['keys', 'held by the queen · see About'],
+  ].map(([k, v]) => `<b>${k}</b><span>${v}</span>`).join('');
+}
+
+async function render(st, live, age) {
+  $('#capNote').textContent = live ? 'live' : 'recorded run · colony launch pending';
+  if (st.eco && st.eco.birth_cost_eth) BIRTH = st.eco.birth_cost_eth;
+  st_eco = st.eco || {};
+  flies = (st.flies || []);
+  renderNow(st); renderFeed(st); renderHood(st, live, age);
+  await syncThumbs();
+  layoutGrid();
+  const cur = flies.find((f) => f.addr === selected) || flies[0] || null;
+  await setFeatured(cur);
+}
+
+async function hive() {
+  try {
+    const h = await (await fetch('/api/hive', { cache: 'no-store' })).json();
+    if (!h.deployed) return;
+    const a = (x) => `<a href="${EXPL}/address/${x}" target="_blank" rel="noopener">${short(x)}</a>`;
+    if (h.token) { $('#ca').innerHTML = `CA · <a href="${EXPL}/token/${h.token}" target="_blank" rel="noopener">${short(h.token)}</a>`; }
+    if (h.error) { $('#hiveKv').innerHTML = `<b>rpc</b><span>${h.error}</span>`; return; }
+    $('#hiveKv').innerHTML = [
+      ['hive', a(h.hive)], ['balance', f5(eth(h.balance_wei)) + ' ETH · ' + h.eggs + ' eggs'],
+      ['births', h.births], ['fed', f5(eth(h.total_fed_wei)) + ' ETH'], ['spawned', f5(eth(h.total_spawned_wei)) + ' ETH'],
+      ['buried', f5(eth(h.total_buried_wei)) + ' ETH'], ['tax waiting', f5(eth(h.pending_on_curve_wei)) + ' on curve · ' + f5(eth(h.pending_in_escrow_wei)) + ' in escrow'],
+      ['burned', fmt(Math.round(eth(h.burned_units))) + ' SWARM'], ['to graduation', (h.liquidity_frac * 100).toFixed(1) + '%'],
+    ].map(([k, v]) => `<b>${k}</b><span>${v}</span>`).join('');
+  } catch {}
+}
+
+async function tick() {
+  try {
+    const d = await (await fetch('/api/live', { cache: 'no-store' })).json();
+    if (d.live && d.state) { await render(d.state, true, d.age_s); return; }
+  } catch {}
+  const demo = await (await fetch('/demo.json', { cache: 'no-store' })).json();
+  await render(demo, false, 0);
+}
+
+$('#aboutBtn').onclick = () => { $('#about').hidden = false; };
+$('#aboutX').onclick = () => { $('#about').hidden = true; };
+
+(async () => {
+  try {
+    await loadCloud();
+    geomThumbBase = makeGeom(THUMB);
+    buildFeatured();
+    resize();
+    loop();
+    await tick(); hive();
+    setInterval(tick, 30000); setInterval(hive, 60000);
+  } catch (e) { $('#err').style.display = 'block'; $('#err').textContent = 'could not start: ' + e.message; }
+})();
+</script>
+</body>
+</html>

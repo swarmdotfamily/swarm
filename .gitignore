@@ -1,0 +1,12 @@
+.env
+.env.*
+!.env.example
+build/
+__pycache__/
+*.pyc
+contracts/node_modules
+contracts/cache
+contracts/artifacts
+site/.vercel
+.vercel
+*.log

@@ -1,0 +1,6 @@
+{
+  "name": "swarm-site",
+  "private": true,
+  "type": "module",
+  "dependencies": {}
+}

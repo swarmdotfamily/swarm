@@ -1,0 +1,13 @@
+{
+  "name": "swarm-contracts",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "test": "hardhat test"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "dotenv": "^17.4.2",
+    "hardhat": "^2.22.17"
+  }
+}
