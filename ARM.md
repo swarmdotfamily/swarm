@@ -1,7 +1,19 @@
 # SWARM runbook
 
-Status 2026-09-11: contract + colony built and tested locally. Nothing deployed, no coin,
-no keys, no VPS. `DESIGN.md` has the mechanics and the scorecard.
+**LIVE since 2026-09-11 06:32 UTC.** Hive `0x6F6B699AFb429135a5C0Ec827eb9C473fF545adA`, token SWARM
+`0x074b33Bfb800b005CB7d1466a14Faa6e90Df7947`, curve `0xFBBAB018708d9b1c5F448Aa47F6b1C890CFF393b`,
+queen `0x86543aAd59210f3649c45bD0edf4cCBc7961C6b9`, hatch tx `0x045dddd4…e9f6`.
+
+| piece | where |
+|---|---|
+| queen daemon | fly VPS `193.149.129.108`, systemd `swarm`, code `/opt/swarm`, venv `/opt/flybrain/venv`, log `/opt/swarm/build/queen.log`, fly keys `/opt/swarm/build/flies/`, ledger `/opt/swarm/build/ledger.json` |
+| relay | VPS `162.252.198.162`, pm2 `swarm-relay`, port **4673**, `https://swarm.162-252-198-162.sslip.io` |
+| site | Vercel `swarm` (ollieagent) → www.swarm.family, env SWARM_RELAY_URL/HIVE/TOKEN/CURVE set |
+| queen key | `swarm/.env` on the PC and `/opt/swarm/.env` on the fly VPS only |
+
+Ops: `systemctl restart swarm`, `tail -f /opt/swarm/build/queen.log`. Update code: scp `colony/` then restart
+(never mid-tick if you can help it; a restart re-runs the tick, births are journaled and keys persist).
+Never run a second queen (PC dry runs are fine, they never send). `DESIGN.md` has the mechanics.
 
 ## Local checks
 

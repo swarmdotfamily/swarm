@@ -86,8 +86,8 @@ async def main_async(a):
     col = Colony(brain, chain, eco, persist=True, journal=BUILD / "events.jsonl",
                  queen_key=env["SWARM_QUEEN_SECRET"])
     col.load_ledger(BUILD / "ledger.json")
-    if env.get("SWARM_SEED_ETH") and col.income_wei == 0:
-        col.income_wei = int(float(env["SWARM_SEED_ETH"]) * 10**18)
+    if env.get("SWARM_SEED_ETH"):
+        col.income_wei = max(col.income_wei, int(float(env["SWARM_SEED_ETH"]) * 10**18))
     n = restore(col)
     say(f"brain {brain.name} ({getattr(brain, 'neurons', 0):,} neurons)  flies restored {n}"
         f"  cap {eco.max_flies}  tick {eco.tick_s}s  {'LIVE' if live else 'DRY RUN'}")

@@ -50,6 +50,7 @@ class Colony:
         self.income_wei = 0        # every wei that ever entered the colony from outside
         self.burn_wei = 0          # ETH-value ever spent on burning (capped by burn_budget_frac)
         self.ledger_path = None    # persisted counters (live daemon)
+        self.fly_burials = 0       # wei dying flies sent back to the hive (already counted as income)
         self.history = []          # (tick, pop, births, deaths, eggs, price) for the chart
         self.tape = Tape()
         self.events = []           # last N events for the site
@@ -98,6 +99,7 @@ class Colony:
         if self.ledger_path.exists():
             j = json.loads(self.ledger_path.read_text())
             self.income_wei = int(j.get("income_wei", 0)); self.burn_wei = int(j.get("burn_wei", 0))
+            self.fly_burials = int(j.get("fly_burials", 0))
             self.burned = int(j.get("burned", 0)); self.tick_no = int(j.get("tick", 0))
             self.births = int(j.get("births", 0)); self.deaths = int(j.get("deaths", 0))
             self.splits = int(j.get("splits", 0)); self.history = j.get("history", [])
@@ -108,7 +110,7 @@ class Colony:
         self.ledger_path.parent.mkdir(parents=True, exist_ok=True)
         self.ledger_path.write_text(json.dumps({
             "income_wei": self.income_wei, "burn_wei": self.burn_wei, "burned": self.burned,
-            "tick": self.tick_no, "births": self.births, "deaths": self.deaths, "splits": self.splits,
+            "fly_burials": self.fly_burials, "tick": self.tick_no, "births": self.births, "deaths": self.deaths, "splits": self.splits,
             "history": self.history[-720:]}))
 
     # ------------------------------------------------------------ genomes
@@ -144,7 +146,19 @@ class Colony:
     def hive_births(self):
         n = 0
         cap = max(1, self.eco.tick_s // max(1, self.eco.birth_interval_s))
-        while n < cap and len(self.flies) < self.eco.max_flies and self.chain.hive_can_spawn():
+        if not self._is_sim():
+            cap = min(cap, 5)                       # leave most of the tick for thinking
+        while n < cap and len(self.flies) < self.eco.max_flies:
+            if not self._is_sim():
+                # respect the contract's birth interval: wait for the next slot (bounded)
+                nxt = self.chain._u256(self.chain.hive_addr, "nextBirthAt()")
+                wait = nxt - time.time()
+                if wait > 90:
+                    break
+                if wait > 0:
+                    time.sleep(wait + 2)
+            if not self.chain.hive_can_spawn():
+                break
             genome = self._child_genome()
             fly = self._new_fly(genome, "hive")
             if self.persist:
@@ -156,7 +170,9 @@ class Colony:
             self._log("born", addr=fly.addr, origin="hive", gid=genome.gid, gen=genome.gen,
                       parents=list(genome.parents), tx=h)
             if not self._is_sim():
-                break                              # one hive birth per tick on chain: the interval rules anyway
+                if not self.chain.live:
+                    break                          # dry run: chain state will not change
+                time.sleep(4)                      # let the spawn mine before re-reading
         return n
 
     def split(self, fly):
@@ -196,6 +212,8 @@ class Colony:
             back = eth - (0 if self._is_sim() else self.eco.gas_reserve // 2)
             if back > 0:
                 txs.append(self.chain.transfer(self._key_or_addr(fly), "hive", back))
+                if not self._is_sim():
+                    self.fly_burials += back
         except Exception as e:   # a failed burial must not stop the colony; the key stays until it succeeds
             self._log("burial-failed", addr=fly.addr, err=str(e)[:200])
             fly.alive = True
@@ -220,12 +238,26 @@ class Colony:
         eco = self.eco
 
         # 1. food
+        fresh = 0
         try:
-            fresh = self.chain.feed() if self._is_sim() else self.chain.feed(self.queen_key)
+            if self._is_sim():
+                fresh = self.chain.feed()
+                self.income_wei += int(fresh)
+            else:
+                # on chain: feed only when there is something worth the gas, and count
+                # income from the hive's own totals (minus what our dying flies returned)
+                on_curve, in_escrow = self.chain.hive_pending()
+                if on_curve + in_escrow >= self.eco.birth_cost // 4:
+                    self.chain.feed(self.queen_key)
+                    if self.chain.live:
+                        time.sleep(6)
+                fed, buried = self.chain.hive_totals()
+                outside = fed + buried - self.fly_burials
+                if outside > self.income_wei:
+                    fresh = outside - self.income_wei
+                    self.income_wei = outside
         except Exception as e:
-            fresh = 0
             self._log("feed-failed", err=str(e)[:200])
-        self.income_wei += int(fresh)
 
         # 2. births from the hive
         self.hive_births()

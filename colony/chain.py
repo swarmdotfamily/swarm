@@ -299,6 +299,10 @@ class RpcChain:
         nxt = self._u256(self.hive_addr, "nextBirthAt()")
         return self.hive_eggs() > 0 and time.time() >= nxt
 
+    def hive_totals(self):
+        """(totalFed, totalBuried) from the Hive: everything that ever entered it."""
+        return (self._u256(self.hive_addr, "totalFed()"), self._u256(self.hive_addr, "totalBuried()"))
+
     def hive_pending(self):
         out = self._eth_call(self.hive_addr, _sel("pending()"))
         return int.from_bytes(out[:32], "big"), int.from_bytes(out[32:64], "big")
