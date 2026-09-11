@@ -6,10 +6,10 @@ queen `0x86543aAd59210f3649c45bD0edf4cCBc7961C6b9`, hatch tx `0x045dddd4…e9f6`
 
 | piece | where |
 |---|---|
-| queen daemon | fly VPS `193.149.129.108`, systemd `swarm`, code `/opt/swarm`, venv `/opt/flybrain/venv`, log `/opt/swarm/build/queen.log`, fly keys `/opt/swarm/build/flies/`, ledger `/opt/swarm/build/ledger.json` |
+| queen daemon | **queen VPS `168.100.11.238`** (8 vCPU / 32 GB, BitLaunch), systemd `swarm`, code `/opt/swarm`, venv `/opt/swarm/venv`, connectome files `/opt/flybrain/`, log `/opt/swarm/build/queen.log`, fly keys `/opt/swarm/build/flies/`, ledger `/opt/swarm/build/ledger.json`; `SWARM_WORKERS=8`, `SWARM_MAX_FLIES=330` (16 decisions in 17 s). The old queen on the fly VPS `193.149.129.108` is disabled — never re-enable it while this one runs. |
 | relay | VPS `162.252.198.162`, pm2 `swarm-relay`, port **4673**, `https://swarm.162-252-198-162.sslip.io` |
 | site | Vercel `swarm` (ollieagent) → www.swarm.family, env SWARM_RELAY_URL/HIVE/TOKEN/CURVE set |
-| queen key | `swarm/.env` on the PC and `/opt/swarm/.env` on the fly VPS only |
+| queen key | `swarm/.env` on the PC and `/opt/swarm/.env` on the queen VPS only (a stale copy remains on the fly VPS) |
 
 Ops: `systemctl restart swarm`, `tail -f /opt/swarm/build/queen.log`. Update code: scp `colony/` then restart
 (never mid-tick if you can help it; a restart re-runs the tick, births are journaled and keys persist).
