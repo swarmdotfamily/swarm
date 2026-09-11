@@ -43,6 +43,7 @@ QUEEN_MIN = 10**15 // 2          # 0.0005 ETH: below this the queen gets topped 
 QUEEN_TOPUP = 3 * 10**15         # 0.003 ETH: ~200 spawns of gas
 SPAWN_GAS = 200_000              # measured 123,686
 FEED_GAS = 300_000
+GAS_CEILING = 10**9              # 1 gwei: above this, wait rather than overpay
 
 
 def say(*a):
@@ -93,11 +94,46 @@ class Recovery:
             f.write(json.dumps(rec, default=str) + "\n")
 
     def gas_price(self):
-        return min(int(self.c._call("eth_gasPrice", []), 16) * 12 // 10, self.c.gas_price_cap)
+        """max(quoted * 1.2, base fee * 2)."""
+        quoted = int(self.c._call("eth_gasPrice", []), 16)
+        blk = self.c._call("eth_getBlockByNumber", ["latest", False]) or {}
+        base = int(blk.get("baseFeePerGas", "0x0"), 16)
+        return max(quoted * 12 // 10, base * 2)
 
-    def send(self, key, to, value, data=b"", gas=None, gp=None, intent=""):
+    def gas_price_ok(self):
+        """Wait out spikes: returns a price at or under GAS_CEILING."""
+        for i in range(90):                      # up to ~30 minutes
+            gp = self.gas_price()
+            if gp <= GAS_CEILING:
+                return gp
+            if i % 6 == 0:
+                say(f"gas spike: {gp / 1e9:.3f} gwei > ceiling {GAS_CEILING / 1e9:.2f}, waiting")
+            time.sleep(20)
+        raise RuntimeError("gas stayed above the ceiling for 30 minutes")
+
+    def send(self, key, to, value, data=b"", gas=None, gp=None, intent="", value_fn=None):
+        """value_fn(gp) recomputes value for a fresh gas price (sweep-all sends)."""
+        last = None
+        for attempt in range(6):
+            try:
+                return self._send_once(key, to, value, data, gas, gp, intent, value_fn)
+            except Exception as e:
+                msg = str(e).lower()
+                if "reverted" in msg or "insufficient funds" in msg:
+                    raise
+                last = e
+                say(f"  retry {attempt + 1}: {str(e)[:90]}")
+                gp = None
+                time.sleep(15)
+        raise RuntimeError(f"gave up after retries: {last}")
+
+    def _send_once(self, key, to, value, data, gas, gp, intent, value_fn):
         acct = Account.from_key(key)
-        gp = gp or self.gas_price()
+        gp = gp or self.gas_price_ok()
+        if value_fn is not None:
+            value = value_fn(gp)
+            if value <= 0:
+                return None
         if gas is None:
             gas = int(self.c._call("eth_estimateGas", [{"from": acct.address, "to": to, "value": hex(value),
                                                         "data": "0x" + data.hex()}]), 16) * 12 // 10
@@ -106,6 +142,7 @@ class Recovery:
               "data": "0x" + data.hex(), "gas": int(gas), "gasPrice": int(gp)}
         signed = Account.sign_transaction(tx, key)
         h = _hex(signed.hash)
+        self.last_value = int(value)
         rec = {"intent": intent, "from": acct.address, "to": tx["to"], "value": int(value), "gas": gas,
                "gasPrice": gp, "nonce": nonce, "hash": h, "status": "intent", "live": self.live}
         self.journal(rec)
@@ -117,7 +154,7 @@ class Recovery:
         return h
 
     def wait(self, h, timeout=180):
-        if not self.live or str(h).startswith("dry:"):
+        if h is None or not self.live or str(h).startswith("dry:"):
             return None
         t0 = time.time()
         while time.time() - t0 < timeout:
@@ -158,6 +195,61 @@ class Recovery:
         except Exception as e:
             say("relay push failed:", str(e)[:100])
 
+    def forward_all(self, key, addr, intent):
+        """Send everything above gas from addr to the destination. Returns wei sent."""
+        h = self.send(key, self.dest, 0, gas=21_000, intent=intent,
+                      value_fn=lambda gp: self.c.balance(addr) - 21_000 * gp)
+        if h is None:
+            return 0
+        self.wait(h)
+        return self.last_value
+
+    def rescue_children(self):
+        """Recovery wallets that got a release but never forwarded it (crash, gas spike)."""
+        d = REC_DIR / "children"
+        if not d.exists():
+            return
+        n = 0
+        for p in sorted(d.glob("0x*.json")):
+            j = json.loads(p.read_text())
+            try:
+                if self.c.balance(j["addr"]) > 21_000 * GAS_CEILING:
+                    v = self.forward_all(j["key"], j["addr"], f"rescue child {j['addr']}: -> operator")
+                    if v:
+                        self.rec["from_hive_wei"] += v
+                        n += 1
+            except Exception as e:
+                say(f"  rescue {j['addr']} failed: {str(e)[:90]}")
+        if n:
+            say(f"rescued {n} stranded recovery wallets")
+
+    def load_totals(self):
+        """Carry totals across reruns so the site shows the whole recovery."""
+        p = BUILD / "recover.jsonl"
+        if not p.exists():
+            return
+        seen = set()
+        for line in p.read_text(encoding="utf-8").splitlines():
+            r = json.loads(line)
+            if r.get("status") != "sent" or r.get("hash") in seen:
+                continue
+            seen.add(r["hash"])
+            it = r.get("intent", "")
+            if r["to"].lower() == self.dest.lower():
+                if it.startswith("fly "):
+                    if "SWARM units" in it:
+                        self.rec["tokens_units"] += int(it.split(": ")[1].split(" ")[0])
+                    else:
+                        self.rec["from_flies_wei"] += r["value"]
+                elif "child" in it:
+                    self.rec["from_hive_wei"] += r["value"]
+            elif it.startswith("fly ") and "SWARM units" in it:
+                self.rec["tokens_units"] += int(it.split(": ")[1].split(" ")[0])
+            if it.startswith("hive.spawn"):
+                self.rec["spawns"] += 1
+            if "-> queen" in it:
+                self.rec["queen_gas_wei"] += r["value"]
+
     # ------------------------------------------------------------ phase 1
     def sweep_flies(self):
         say(f"flies: {len(self.remaining)} wallets to sweep")
@@ -167,7 +259,7 @@ class Recovery:
             p = FLIES_DIR / f"{addr}.json"
             key = json.loads(p.read_text())["key"]
             try:
-                gp = self.gas_price()
+                gp = self.gas_price_ok()
                 tok = self.c.tokens(addr)
                 if tok > 0:
                     h = self.send(key, self.c.token_addr, 0,
@@ -216,51 +308,55 @@ class Recovery:
     def drain_hive(self, max_wei=None):
         (REC_DIR / "children").mkdir(parents=True, exist_ok=True)
         self.push("draining the hive")
-        self.feed()
+        self.rescue_children()
+        fails = 0
         while True:
-            hb = self.c.balance(self.c.hive_addr)
-            if hb < self.eco.birth_cost:
-                self.feed()
+            try:
+                if self.rec["spawns"] % 10 == 0:
+                    self.feed()
                 if self.c.balance(self.c.hive_addr) < self.eco.birth_cost:
-                    say("hive: less than one birth left, done")
+                    self.feed()
+                    if self.c.balance(self.c.hive_addr) < self.eco.birth_cost:
+                        say("hive: less than one release left, done")
+                        break
+                if max_wei is not None and self.rec["from_hive_wei"] >= max_wei:
+                    say("hive: reached --max-eth, done")
                     break
-            if max_wei is not None and self.rec["from_hive_wei"] >= max_wei:
-                say("hive: reached --max-eth, done")
-                break
-            if self.live and self.c.balance(self.queen) < SPAWN_GAS * self.gas_price():
-                raise SystemExit("queen is out of gas: send it ~0.003 ETH and rerun with --hive-only")
-            wait_s = self.c._u256(self.c.hive_addr, "nextBirthAt()") - time.time()
-            if wait_s > 0:
-                time.sleep(wait_s + 2)
+                if self.live and self.c.balance(self.queen) < SPAWN_GAS * GAS_CEILING:
+                    raise SystemExit("queen is out of gas: send it ~0.003 ETH and rerun")
+                wait_s = self.c._u256(self.c.hive_addr, "nextBirthAt()") - time.time()
+                if wait_s > 0:
+                    time.sleep(wait_s + 2)
 
-            child = Account.create()
-            ckey = _hex(child.key)
-            (REC_DIR / "children" / f"{child.address}.json").write_text(
-                json.dumps({"addr": child.address, "key": ckey, "t": time.time()}))
-            h = self.send(self.queen_key, self.c.hive_addr, 0,
-                          _enc("spawn(address)", ["address"], [child.address]), gas=SPAWN_GAS,
-                          intent=f"hive.spawn -> recovery child {child.address}")
-            self.wait(h)
-            if not self.live:
-                say("hive: dry run, one spawn signed, stopping")
-                break
-
-            gp = self.gas_price()
-            bal = self.c.balance(child.address)
-            if self.c.balance(self.queen) < QUEEN_MIN and bal > QUEEN_MIN * 2:
-                h2 = self.send(ckey, self.queen, QUEEN_MIN, gas=21_000, gp=gp, intent="child: queen gas top-up")
-                self.wait(h2)
-                bal = self.c.balance(child.address)
-            value = bal - 21_000 * gp
-            h3 = self.send(ckey, self.dest, value, gas=21_000, gp=gp, intent=f"child {child.address}: -> operator")
-            self.wait(h3)
-            self.rec["from_hive_wei"] += value
-            self.rec["spawns"] += 1
-            left = self.c.balance(self.c.hive_addr)
-            say(f"  spawn {self.rec['spawns']}: +{value / 1e18:.6f} ETH  (hive left {left / 1e18:.4f})")
-            if self.rec["spawns"] % 10 == 0:
-                self.feed()
-            self.push()
+                child = Account.create()
+                ckey = _hex(child.key)
+                (REC_DIR / "children" / f"{child.address}.json").write_text(
+                    json.dumps({"addr": child.address, "key": ckey, "t": time.time()}))
+                h = self.send(self.queen_key, self.c.hive_addr, 0,
+                              _enc("spawn(address)", ["address"], [child.address]), gas=SPAWN_GAS,
+                              intent=f"hive.spawn -> recovery child {child.address}")
+                self.wait(h)
+                if not self.live:
+                    say("hive: dry run, one release signed, stopping")
+                    break
+                self.rec["spawns"] += 1
+                v = self.forward_all(ckey, child.address, f"child {child.address}: -> operator")
+                self.rec["from_hive_wei"] += v
+                fails = 0
+                left = self.c.balance(self.c.hive_addr)
+                say(f"  release {self.rec['spawns']}: +{v / 1e18:.6f} ETH  (hive left {left / 1e18:.4f})")
+                if self.rec["spawns"] % 30 == 0:
+                    self.rescue_children()
+                self.push()
+            except SystemExit:
+                raise
+            except Exception as e:
+                fails += 1
+                say(f"  hiccup {fails}: {str(e)[:120]}")
+                self.journal({"intent": "drain iteration", "status": "failed", "err": str(e)[:300]})
+                if fails >= 20:
+                    raise
+                time.sleep(30)
 
 
 def main():
@@ -278,6 +374,8 @@ def main():
         raise SystemExit("the queen is running: systemctl stop swarm && systemctl disable swarm, then rerun")
 
     r = Recovery(env, a.to, a.live)
+    if a.live:
+        r.load_totals()
     hb = r.c.balance(r.c.hive_addr)
     say(f"{'LIVE' if a.live else 'DRY RUN'}  to {r.dest}")
     say(f"hive {hb / 1e18:.4f} ETH (~{hb / r.eco.birth_cost / 60:.1f} h at 0.002 ETH/min), "
