@@ -340,6 +340,12 @@ class Recovery:
                     say("hive: dry run, one release signed, stopping")
                     break
                 self.rec["spawns"] += 1
+                if self.c.balance(self.queen) < QUEEN_MIN:
+                    # keep the queen able to pay for the next releases (stays operator-held)
+                    h2 = self.send(ckey, self.queen, QUEEN_MIN // 2, gas=21_000,
+                                   intent="child: queen gas top-up")
+                    self.wait(h2)
+                    self.rec["queen_gas_wei"] += QUEEN_MIN // 2
                 v = self.forward_all(ckey, child.address, f"child {child.address}: -> operator")
                 self.rec["from_hive_wei"] += v
                 fails = 0
