@@ -103,6 +103,12 @@
 </div>
 
 <aside id="side">
+  <section id="recov" hidden>
+    <h2>Operator recovery</h2>
+    <div class="kv" id="recovKv"></div>
+    <div class="u" style="margin-top:6px">the operator is recalling the colony's ETH, a right published in About · the Hive releases at most 0.002 ETH per minute · the flies are paused</div>
+  </section>
+
   <section>
     <h2>Now</h2>
     <div class="grid2">
@@ -480,6 +486,19 @@ function renderHood(st, live, age) {
 
 async function render(st, live, age) {
   $('#capNote').textContent = live ? 'live' : 'recorded run · colony launch pending';
+  const rec = st.recovery;
+  $('#recov').hidden = !rec;
+  if (rec) {
+    const a = (x) => `<a href="${EXPL}/address/${x}" target="_blank" rel="noopener">${short(x)}</a>`;
+    $('#recovKv').innerHTML = [
+      ['status', rec.status],
+      ['to', a(rec.to)],
+      ['from the hive', `${f5(eth(rec.from_hive_wei))} ETH · ${rec.spawns} releases`],
+      ['from fly wallets', `${f5(eth(rec.from_flies_wei))} ETH · ${rec.flies_swept} flies`],
+      ['SWARM moved', fmt(Math.round(eth(rec.tokens_units)))],
+    ].map(([k, v]) => `<b>${k}</b><span>${v}</span>`).join('');
+    $('#capNote').textContent = 'operator recovery in progress · the flies are paused';
+  }
   if (st.eco && st.eco.birth_cost_eth) BIRTH = st.eco.birth_cost_eth;
   st_eco = st.eco || {};
   flies = (st.flies || []);
