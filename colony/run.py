@@ -97,16 +97,24 @@ async def main_async(a):
         asyncio.create_task(pusher(env["SWARM_RELAY_PUSH"], env["SWARM_RELAY_SECRET"], queue))
 
     BUILD.mkdir(exist_ok=True)
+    loop = asyncio.get_running_loop()
+
+    def publish(st):
+        st["live"] = live
+        (BUILD / "state.json").write_text(json.dumps(st, default=str))
+        msg = json.dumps({"type": "state", "state": st}, default=str)
+        def _put():
+            if queue.full():
+                queue.get_nowait()
+            queue.put_nowait(msg)
+        loop.call_soon_threadsafe(_put)
+
+    col.on_progress = publish
     while True:
         t0 = time.time()
         try:
             st = await asyncio.to_thread(col.tick)
-            st["live"] = live
-            (BUILD / "state.json").write_text(json.dumps(st, default=str))
-            msg = json.dumps({"type": "state", "state": st}, default=str)
-            if queue.full():
-                queue.get_nowait()
-            queue.put_nowait(msg)
+            publish(st)
             say(f"tick {st['tick']}  pop {st['population']}/{st['cap']}  eggs {st['hive_eggs']}"
                 f"  births {st['births']}  deaths {st['deaths']}  gen {st['max_gen']}"
                 f"  {st['tick_secs']}s")

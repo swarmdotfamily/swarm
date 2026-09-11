@@ -51,6 +51,7 @@ class Colony:
         self.burn_wei = 0          # ETH-value ever spent on burning (capped by burn_budget_frac)
         self.ledger_path = None    # persisted counters (live daemon)
         self.fly_burials = 0       # wei dying flies sent back to the hive (already counted as income)
+        self.on_progress = None    # callback(state) fired during a tick so the site never waits for the end
         self.history = []          # (tick, pop, births, deaths, eggs, price) for the chart
         self.tape = Tape()
         self.events = []           # last N events for the site
@@ -88,6 +89,13 @@ class Colony:
 
     def alive_frac(self):
         return len(self.flies) / self.eco.max_flies
+
+    def _progress(self):
+        if self.on_progress:
+            try:
+                self.on_progress(self.state())
+            except Exception:
+                pass
 
     # ------------------------------------------------------------ ledger
     def burn_budget_left(self):
@@ -169,6 +177,7 @@ class Colony:
             n += 1
             self._log("born", addr=fly.addr, origin="hive", gid=genome.gid, gen=genome.gen,
                       parents=list(genome.parents), tx=h)
+            self._progress()
             if not self._is_sim():
                 if not self.chain.live:
                     break                          # dry run: chain state will not change
@@ -343,6 +352,7 @@ class Colony:
 
             # reproduce
             self._refresh(fly)
+            self._progress()
             if fly.worth >= eco.split_at and len(self.flies) < eco.max_flies:
                 try:
                     self.split(fly)

@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     const state = st.state || null;
     const now = Math.floor(Date.now() / 1000);
     const age = now - (st.updated || 0);
-    const live = !!state && age <= LIVE_WINDOW_S;
+    const live = !!state && age <= LIVE_WINDOW_S && state.brain === 'connectome';
     return res.status(200).json({ live, age_s: age, at: st.updated || 0, state, reason: live ? 'relay' : 'stale' });
   } catch (e) {
     return res.status(200).json({ live: false, reason: String(e.message || e).slice(0, 80), at: 0 });
